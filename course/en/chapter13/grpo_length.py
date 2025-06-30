@@ -9,14 +9,14 @@ def _():
     import marimo as mo
 
     mo.md(
-        "## Length based reward\nAdjust the slider to see how the reward changes for different completion lengths."
+        "## 길이 기반 보상\n슬라이더를 조정하여 다양한 완료 길이에 따라 보상이 어떻게 변하는지 확인하세요."
     )
     return (mo,)
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    slider = mo.ui.slider(start=5, stop=50, step=5, label="Ideal Length (characters)")
+    slider = mo.ui.slider(start=5, stop=50, step=5, label="이상적인 길이 (문자)")
     slider
     return (slider,)
 
@@ -25,13 +25,13 @@ def _(mo):
 def _(mo, slider):
     import plotly.express as px
 
-    # Toy dataset with 5 samples of different lengths
+    # 길이가 다른 5개의 샘플이 있는 토이 데이터세트
     completions = [
-        "Short",  # 5 chars
-        "Medium length text",  # 18 chars
-        "This is about twenty chars",  # 25 chars
-        "This is a slightly longer completion",  # 36 chars
-        "This is a much longer completion with more words",  # 45 chars
+        "짧음",  # 2자
+        "중간 길이 텍스트",  # 9자
+        "이것은 약 20자입니다",  # 13자
+        "이것은 약간 더 긴 완료입니다",  # 17자
+        "이것은 단어가 더 많은 훨씬 긴 완료입니다",  # 26자
     ]
 
     maximum_length = max(len(completion) for completion in completions)
@@ -39,20 +39,20 @@ def _(mo, slider):
 
     def length_reward(completions, ideal_length):
         """
-        Calculate rewards based on the length of completions.
+        완료 길이를 기준으로 보상을 계산합니다.
 
         Args:
-            completions: List of text completions
-            ideal_length: Target length in characters
+            completions: 텍스트 완료 목록
+            ideal_length: 목표 길이 (문자)
 
         Returns:
-            List of reward scores for each completion
+            각 완료에 대한 보상 점수 목록
         """
         rewards = []
 
         for completion in completions:
             length = len(completion)
-            # Simple reward function: negative absolute difference
+            # 간단한 보상 함수: 음의 절대 차이
             reward = maximum_length - abs(length - ideal_length)
             reward = max(0, reward)
             reward = min(1, reward / (maximum_length - minimum_length))
@@ -60,10 +60,10 @@ def _(mo, slider):
 
         return rewards
 
-    # Calculate rewards for the examples
+    # 예제에 대한 보상 계산
     rewards = length_reward(completions=completions, ideal_length=slider.value)
 
-    # Display the examples and their rewards
+    # 예제와 해당 보상 표시
     results = []
     for completion, reward in zip(completions, rewards):
         results.append(
