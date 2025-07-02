@@ -1,4 +1,4 @@
-# this is a demo of inference of IDEFICS-9B which needs about 20GB of GPU memory
+# 이것은 약 20GB의 GPU 메모리가 필요한 IDEFICS-9B 추론 데모입니다.
 
 import torch
 from transformers import IdeficsForVisionText2Text, AutoProcessor
@@ -49,9 +49,9 @@ prompts = [
     ],
 ]
 
-# batched mode
+# 배치 모드
 inputs = processor(prompts, return_tensors="pt").to(device)
-# single sample mode
+# 단일 샘플 모드
 #inputs = processor(prompts[0], return_tensors="pt").to(device)
 
 generated_ids = model.generate(**inputs, max_length=128)

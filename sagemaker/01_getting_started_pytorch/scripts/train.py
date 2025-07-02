@@ -12,7 +12,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    # hyperparameters sent by the client are passed as command-line arguments to the script.
+    # 클라이언트에서 보낸 하이퍼파라미터는 명령줄 인수로 스크립트에 전달됩니다.
     parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--train_batch_size", type=int, default=32)
     parser.add_argument("--eval_batch_size", type=int, default=64)
@@ -20,7 +20,7 @@ if __name__ == "__main__":
     parser.add_argument("--model_name", type=str)
     parser.add_argument("--learning_rate", type=str, default=5e-5)
 
-    # Data, model, and output directories
+    # 데이터, 모델 및 출력 디렉터리
     parser.add_argument("--output_data_dir", type=str, default=os.environ["SM_OUTPUT_DATA_DIR"])
     parser.add_argument("--model_dir", type=str, default=os.environ["SM_MODEL_DIR"])
     parser.add_argument("--n_gpus", type=str, default=os.environ["SM_NUM_GPUS"])
@@ -29,7 +29,7 @@ if __name__ == "__main__":
 
     args, _ = parser.parse_known_args()
 
-    # Set up logging
+    # 로깅 설정
     logger = logging.getLogger(__name__)
 
     logging.basicConfig(
@@ -38,14 +38,14 @@ if __name__ == "__main__":
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
-    # load datasets
+    # 데이터 세트 로드
     train_dataset = load_from_disk(args.training_dir)
     test_dataset = load_from_disk(args.test_dir)
 
     logger.info(f" loaded train_dataset length is: {len(train_dataset)}")
     logger.info(f" loaded test_dataset length is: {len(test_dataset)}")
 
-    # compute metrics function for binary classification
+    # 이진 분류를 위한 메트릭 계산 함수
     def compute_metrics(pred):
         labels = pred.label_ids
         preds = pred.predictions.argmax(-1)
@@ -53,11 +53,11 @@ if __name__ == "__main__":
         acc = accuracy_score(labels, preds)
         return {"accuracy": acc, "f1": f1, "precision": precision, "recall": recall}
 
-    # download model from model hub
+    # 모델 허브에서 모델 다운로드
     model = AutoModelForSequenceClassification.from_pretrained(args.model_name)
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
 
-    # define training args
+    # 학습 인수 정의
     training_args = TrainingArguments(
         output_dir=args.model_dir,
         num_train_epochs=args.epochs,
@@ -69,7 +69,7 @@ if __name__ == "__main__":
         learning_rate=float(args.learning_rate),
     )
 
-    # create Trainer instance
+    # 트레이너 인스턴스 생성
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -79,17 +79,17 @@ if __name__ == "__main__":
         tokenizer=tokenizer,
     )
 
-    # train model
+    # 모델 학습
     trainer.train()
 
-    # evaluate model
+    # 모델 평가
     eval_result = trainer.evaluate(eval_dataset=test_dataset)
 
-    # writes eval result to file which can be accessed later in s3 ouput
+    # s3 ouput에서 나중에 액세스할 수 있는 파일에 평가 결과 작성
     with open(os.path.join(args.output_data_dir, "eval_results.txt"), "w") as writer:
         print(f"***** Eval results *****")
         for key, value in sorted(eval_result.items()):
             writer.write(f"{key} = {value}\n")
 
-    # Saves the model to s3
+    # 모델을 s3에 저장
     trainer.save_model(args.model_dir)

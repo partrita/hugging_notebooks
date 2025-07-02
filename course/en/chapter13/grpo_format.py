@@ -10,13 +10,12 @@ def _():
 
     mo.md(
         """
-        ## Structure Format Reward Function
+        ## 구조 형식 보상 함수
         
-        This example demonstrates a reward function that evaluates whether 
-        completions follow a specific structure format. Either a `<think>...</think><answer>...</answer>`
-        or a `<code>...</code><explanation>...</explanation>` format.
+        이 예제는 완료가 특정 구조 형식을 따르는지 여부를 평가하는 보상 함수를 보여줍니다.
+        `<think>...</think><answer>...</answer>` 또는 `<code>...</code><explanation>...</explanation>` 형식입니다.
         
-        Use the buttons to select which structure format to reward.
+        버튼을 사용하여 보상할 구조 형식을 선택합니다.
         """
     )
     return (mo,)
@@ -27,7 +26,7 @@ def _(mo):
     format_buttons = mo.ui.radio(
         options=["think-answer", "code-explanation"],
         value="think-answer",
-        label="Format to reward",
+        label="보상할 형식",
     )
     format_buttons
     return (format_buttons,)
@@ -38,39 +37,39 @@ def _(mo, format_buttons):
     import plotly.express as px
     import re
 
-    # Sample completions with different formats
+    # 다양한 형식의 샘플 완료
     completions = [
-        # Think-answer format examples
-        "<think>Let me solve this step by step</think><answer>42</answer>",
-        "The answer is 15 without any special format",
-        "<code>print('Hello world')</code><explanation>This prints a greeting</explanation>",
-        # Code-explanation format examples
-        "<code>def add(a, b): return a + b</code><explanation>A function to add numbers</explanation>",
+        # 생각-답변 형식 예제
+        "<think>단계별로 해결해 보겠습니다</think><answer>42</answer>",
+        "답은 특별한 형식 없이 15입니다",
+        "<code>print('Hello world')</code><explanation>인사말을 인쇄합니다</explanation>",
+        # 코드-설명 형식 예제
+        "<code>def add(a, b): return a + b</code><explanation>숫자를 더하는 함수</explanation>",
         "<code>for i in range(10): print(i)</code>",
-        "<think>I should use a loop</think><code>while True: pass</code>",
+        "<think>루프를 사용해야 합니다</think><code>while True: pass</code>",
     ]
 
-    # Create shortened versions for display
+    # 표시에 사용할 축약 버전 만들기
     short_completions = [c[:30] + "..." if len(c) > 30 else c for c in completions]
 
     def format_reward(completions, format_type="think-answer", **kwargs):
         """
-        Reward completions that follow the desired format structure
+        원하는 형식 구조를 따르는 완료에 보상합니다.
 
         Args:
-            completions: list of completions to evaluate
-            format_type: which format structure to reward
+            completions: 평가할 완료 목록
+            format_type: 보상할 형식 구조
 
         Returns:
-            list of rewards and details
+            보상 및 세부 정보 목록
         """
-        # Define patterns for different formats
+        # 다양한 형식에 대한 패턴 정의
         patterns = {
             "think-answer": r"<think>.*?</think>\s*<answer>.*?</answer>",
             "code-explanation": r"<code>.*?</code>\s*<explanation>.*?</explanation>",
         }
 
-        # Select the pattern based on format_type
+        # format_type에 따라 패턴 선택
         pattern = patterns.get(format_type, patterns["think-answer"])
 
         rewards = []
@@ -80,34 +79,34 @@ def _(mo, format_buttons):
         for completion in completions:
             match = re.search(pattern, completion, re.DOTALL)
             if match:
-                # Full match for the exact format
+                # 정확한 형식에 대한 전체 일치
                 rewards.append(1.0)
-                details.append(f"Correct {format_type} format")
-                categories.append("Exact Format Match")
+                details.append(f"올바른 {format_type} 형식")
+                categories.append("정확한 형식 일치")
             elif f"<{format_type.split('-')[0]}>" in completion:
-                # Partial match - has the opening tag of the format
+                # 부분 일치 - 형식의 여는 태그가 있음
                 rewards.append(0.5)
-                details.append(f"Has {format_type.split('-')[0]} tag but incomplete")
-                categories.append("Partial Format Match")
+                details.append(f"{format_type.split('-')[0]} 태그가 있지만 불완전합니다.")
+                categories.append("부분 형식 일치")
             elif any(f"<{tag}>" in completion for tag in format_type.split("-")):
-                # Contains at least one of the required tags
+                # 필요한 태그 중 하나 이상을 포함합니다.
                 rewards.append(0.2)
-                details.append("Has some required tags but wrong format")
-                categories.append("Some Tags Present")
+                details.append("일부 필수 태그가 있지만 형식이 잘못되었습니다.")
+                categories.append("일부 태그 있음")
             else:
-                # No match at all
+                # 전혀 일치하지 않음
                 rewards.append(0.0)
-                details.append("Incorrect format")
-                categories.append("No Format Match")
+                details.append("잘못된 형식")
+                categories.append("형식 일치 없음")
 
         return rewards, details, categories
 
-    # Calculate rewards
+    # 보상 계산
     rewards, details, categories = format_reward(
         completions=completions, format_type=format_buttons.value
     )
 
-    # Display the results
+    # 결과 표시
     results = []
     for completion, reward, detail, category in zip(
         short_completions, rewards, details, categories
@@ -121,17 +120,17 @@ def _(mo, format_buttons):
             }
         )
 
-    # Create a table view
-    mo.md(f"### Results for {format_buttons.value} format")
+    # 테이블 보기 만들기
+    mo.md(f"### {format_buttons.value} 형식에 대한 결과")
     mo.ui.table(results)
 
-    # Create a bar chart comparing rewards by completion
+    # 완료별 보상을 비교하는 막대 차트 만들기
     fig = px.bar(
         results,
         x="Completion",
         y="Reward",
         color="Category",
-        title=f"Format Rewards by Completion ({format_buttons.value})",
+        title=f"완료별 형식 보상 ({format_buttons.value})",
         hover_data=["Detail"],
     )
     mo.ui.plotly(fig)

@@ -47,7 +47,7 @@ def make_es_index_snippets(es_client, passages_dset, index_name="english_wiki_ki
         for passage in passages_dset:
             yield passage
 
-    # create the ES index
+    # ES 인덱스 생성
     for ok, action in streaming_bulk(client=es_client, index=index_name, actions=passage_generator(),):
         progress.update(1)
         successes += ok
@@ -122,11 +122,11 @@ class RetrievalQAEmbedder(torch.nn.Module):
         self.ce_loss = torch.nn.CrossEntropyLoss(reduction="mean")
 
     def embed_sentences_checkpointed(self, input_ids, attention_mask, checkpoint_batch_size=-1):
-        # reproduces BERT forward pass with checkpointing
+        # 체크포인팅을 사용하여 BERT 정방향 전달을 재현합니다.
         if checkpoint_batch_size < 0 or input_ids.shape[0] < checkpoint_batch_size:
             return self.sent_encoder(input_ids, attention_mask=attention_mask)[1]
         else:
-            # prepare implicit variables
+            # 암시적 변수 준비
             device = input_ids.device
             input_shape = input_ids.size()
             token_type_ids = torch.zeros(input_shape, dtype=torch.long, device=device)
@@ -135,18 +135,18 @@ class RetrievalQAEmbedder(torch.nn.Module):
                 attention_mask, input_shape, device
             )
 
-            # define function for checkpointing
+            # 체크포인팅을 위한 함수 정의
             def partial_encode(*inputs):
                 encoder_outputs = self.sent_encoder.encoder(inputs[0], attention_mask=inputs[1], head_mask=head_mask,)
                 sequence_output = encoder_outputs[0]
                 pooled_output = self.sent_encoder.pooler(sequence_output)
                 return pooled_output
 
-            # run embedding layer on everything at once
+            # 임베딩 레이어를 한 번에 모두 실행
             embedding_output = self.sent_encoder.embeddings(
                 input_ids=input_ids, position_ids=None, token_type_ids=token_type_ids, inputs_embeds=None
             )
-            # run encoding and pooling on one mini-batch at a time
+            # 한 번에 하나의 미니 배치에서 인코딩 및 풀링 실행
             pooled_output_list = []
             for b in range(math.ceil(input_ids.shape[0] / checkpoint_batch_size)):
                 b_embedding_output = embedding_output[b * checkpoint_batch_size : (b + 1) * checkpoint_batch_size]
@@ -177,7 +177,7 @@ class RetrievalQAEmbedder(torch.nn.Module):
 def make_qa_retriever_model(model_name="google/bert_uncased_L-8_H-512_A-8", from_file=None, device="cuda:0"):
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     bert_model = AutoModel.from_pretrained(model_name).to(device)
-    # run bert_model on a dummy batch to get output dimension
+    # 더미 배치에서 bert_model을 실행하여 출력 차원을 가져옵니다.
     d_ids = torch.LongTensor(
         [[bert_model.config.bos_token_id if bert_model.config.bos_token_id is not None else 1]]
     ).to(device)
@@ -208,14 +208,14 @@ def make_qa_retriever_batch(qa_list, tokenizer, max_len=64, device="cuda:0"):
 
 def train_qa_retriever_epoch(model, dataset, tokenizer, optimizer, scheduler, args, e=0):
     model.train()
-    # make iterator
+    # 반복자 만들기
     train_sampler = RandomSampler(dataset)
     model_collate_fn = functools.partial(
         make_qa_retriever_batch, tokenizer=tokenizer, max_len=args.max_length, device="cuda:0"
     )
     data_loader = DataLoader(dataset, batch_size=args.batch_size, sampler=train_sampler, collate_fn=model_collate_fn)
     epoch_iterator = tqdm(data_loader, desc="Iteration", disable=True)
-    # accumulate loss since last print
+    # 마지막 인쇄 이후 손실 누적
     loc_steps = 0
     loc_loss = 0.0
     st_time = time()
@@ -223,12 +223,12 @@ def train_qa_retriever_epoch(model, dataset, tokenizer, optimizer, scheduler, ar
         q_ids, q_mask, a_ids, a_mask = batch
         pre_loss = model(q_ids, q_mask, a_ids, a_mask, checkpoint_batch_size=args.checkpoint_batch_size)
         loss = pre_loss.sum()
-        # optimizer
+        # 옵티마이저
         loss.backward()
         optimizer.step()
         scheduler.step()
         model.zero_grad()
-        # some printing within the epoch
+        # 에포크 내 일부 인쇄
         loc_loss += loss.item()
         loc_steps += 1
         if step % args.print_freq == 0 or step == 1:
@@ -246,7 +246,7 @@ def train_qa_retriever_joint_epoch(model, dataset_list, tokenizer, optimizer, sc
     model_collate_fn = functools.partial(
         make_qa_retriever_batch, tokenizer=tokenizer, max_len=args.max_length, device="cuda:0"
     )
-    # make iterator
+    # 반복자 만들기
     train_samplers = [RandomSampler(dataset) for dataset in dataset_list]
     data_loaders = [
         DataLoader(dataset, batch_size=args.batch_size, sampler=train_sampler, collate_fn=model_collate_fn)
@@ -254,7 +254,7 @@ def train_qa_retriever_joint_epoch(model, dataset_list, tokenizer, optimizer, sc
     ]
     iterators = [iter(dloader) for dloader in data_loaders]
     joint_iter = zip(*iterators)
-    # accumulate loss since last print
+    # 마지막 인쇄 이후 손실 누적
     loc_steps = 0
     loc_loss = 0.0
     st_time = time()
@@ -262,12 +262,12 @@ def train_qa_retriever_joint_epoch(model, dataset_list, tokenizer, optimizer, sc
         for batch in batches:
             q_ids, q_mask, a_ids, a_mask = batch
             loss = model(q_ids, q_mask, a_ids, a_mask, checkpoint_batch_size=args.checkpoint_batch_size)
-            # optimizer
+            # 옵티마이저
             loss.backward()
             optimizer.step()
             scheduler.step()
             model.zero_grad()
-            # some printing within the epoch
+            # 에포크 내 일부 인쇄
             loc_loss += loss.item()
             loc_steps += 1
         if step % args.print_freq == 0:
@@ -282,7 +282,7 @@ def train_qa_retriever_joint_epoch(model, dataset_list, tokenizer, optimizer, sc
 
 def evaluate_qa_retriever(model, dataset, tokenizer, args):
     model.eval()
-    # make iterator
+    # 반복자 만들기
     eval_sampler = SequentialSampler(dataset)
     model_collate_fn = functools.partial(
         make_qa_retriever_batch, tokenizer=tokenizer, max_len=args.max_length, device="cuda:0"
@@ -330,7 +330,7 @@ class ELI5DatasetS2S(Dataset):
         self.make_doc_function = make_doc_fun
         self.document_cache = {} if document_cache is None else document_cache
         assert not (make_doc_fun is None and document_cache is None)
-        # make index of specific question-answer pairs from multi-answers
+        # 다중 답변에서 특정 질문-답변 쌍의 인덱스 만들기
         if self.training:
             self.qa_id_list = [
                 (i, j)
@@ -398,7 +398,7 @@ def make_qa_s2s_batch(qa_list, tokenizer, max_len=64, max_a_len=360, device="cud
 
 def train_qa_s2s_epoch(model, dataset, tokenizer, optimizer, scheduler, args, e=0, curriculum=False):
     model.train()
-    # make iterator
+    # 반복자 만들기
     if curriculum:
         train_sampler = SequentialSampler(dataset)
     else:
@@ -408,7 +408,7 @@ def train_qa_s2s_epoch(model, dataset, tokenizer, optimizer, scheduler, args, e=
     )
     data_loader = DataLoader(dataset, batch_size=args.batch_size, sampler=train_sampler, collate_fn=model_collate_fn)
     epoch_iterator = tqdm(data_loader, desc="Iteration", disable=True)
-    # accumulate loss since last print
+    # 마지막 인쇄 이후 손실 누적
     loc_steps = 0
     loc_loss = 0.0
     st_time = time()
@@ -416,12 +416,12 @@ def train_qa_s2s_epoch(model, dataset, tokenizer, optimizer, scheduler, args, e=
         pre_loss = model(**batch_inputs)[0]
         loss = pre_loss.sum() / pre_loss.shape[0]
         loss.backward()
-        # optimizer
+        # 옵티마이저
         if step % args.backward_freq == 0:
             optimizer.step()
             scheduler.step()
             model.zero_grad()
-        # some printing within the epoch
+        # 에포크 내 일부 인쇄
         loc_loss += loss.item()
         loc_steps += 1
         if step % args.print_freq == 0 or step == 1:
@@ -436,14 +436,14 @@ def train_qa_s2s_epoch(model, dataset, tokenizer, optimizer, scheduler, args, e=
 
 def eval_qa_s2s_epoch(model, dataset, tokenizer, args):
     model.eval()
-    # make iterator
+    # 반복자 만들기
     train_sampler = SequentialSampler(dataset)
     model_collate_fn = functools.partial(
         make_qa_s2s_batch, tokenizer=tokenizer, max_len=args.max_length, device="cuda:0"
     )
     data_loader = DataLoader(dataset, batch_size=args.batch_size, sampler=train_sampler, collate_fn=model_collate_fn)
     epoch_iterator = tqdm(data_loader, desc="Iteration", disable=True)
-    # accumulate loss since last print
+    # 마지막 인쇄 이후 손실 누적
     loc_steps = 0
     loc_loss = 0.0
     st_time = time()
@@ -490,7 +490,7 @@ def train_qa_s2s(qa_s2s_model, qa_s2s_tokenizer, s2s_train_dset, s2s_valid_dset,
         torch.save(m_save_dict, "{}_{}.pth".format(s2s_args.model_save_name, e))
 
 
-# generate answer from input "question: ... context: <p> ..."
+# 입력 "question: ... context: <p> ..."에서 답변 생성
 def qa_s2s_generate(
     question_doc,
     qa_s2s_model,
@@ -591,7 +591,7 @@ def evaluate_retriever(qa_list, retriever_func, scoring_func, n_ret=10, verbose=
     return {"idf_recall": total_retriever_score / (i + 1), "retrieval_time": total_retriever_time / (i + 1)}
 
 
-# build a support document for the question out of Wikipedia snippets
+# 위키백과 스니펫에서 질문에 대한 지원 문서 빌드
 def query_qa_dense_index(
     question, qa_embedder, tokenizer, wiki_passages, wiki_index, n_results=10, min_length=20, device="cuda:0"
 ):
@@ -622,7 +622,7 @@ def batch_query_qa_dense_index(questions, qa_embedder, tokenizer, wiki_passages,
     return support_doc_lst, all_res_lists
 
 
-# find nearest neighbors of an answer or declarative text in Wikipedia snippets
+# 위키백과 스니펫에서 답변 또는 선언적 텍스트의 최근접 이웃 찾기
 def query_qa_dense_index_nn(passage, qa_embedder, tokenizer, wiki_passages, wiki_index, n_results=10, min_length=20):
     a_rep = embed_passages_for_retrieval([passage], tokenizer, qa_embedder)
     D, I = wiki_index.search(a_rep, 2 * n_results)

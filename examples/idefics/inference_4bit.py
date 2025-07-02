@@ -1,5 +1,5 @@
-# this is a demo of inference of IDEFICS-9B using 4bit-quantization which needs about 7GB of GPU memory
-# which makes it possible to run even on Google Colab
+# 이것은 4비트 양자화를 사용하는 IDEFICS-9B 추론 데모이며 약 7GB의 GPU 메모리가 필요합니다.
+# 이를 통해 Google Colab에서도 실행할 수 있습니다.
 
 import torch
 from transformers import IdeficsForVisionText2Text, AutoProcessor, BitsAndBytesConfig
