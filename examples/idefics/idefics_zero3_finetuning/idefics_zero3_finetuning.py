@@ -24,8 +24,8 @@ processor = AutoProcessor.from_pretrained(checkpoint, use_auth_token=True)
 
 
 def convert_to_rgb(image):
-    # `image.convert("RGB")`는 투명한 이미지에 잘못된 배경을 생성하므로 .jpg 이미지에만 작동합니다.
-    # `alpha_composite` 호출은 이 경우를 처리합니다.
+    # `image.convert("RGB")` would only work for .jpg images, as it creates a wrong background
+    # for transparent images. The call to `alpha_composite` handles this case
     if image.mode == "RGB":
         return image
     image_rgba = image.convert("RGBA")
@@ -51,19 +51,20 @@ def ds_transforms(example_batch):
     )
     prompts = []
     for i in range(len(example_batch["caption"])):
-        # 학습 중 더 많은 GPU RAM이 필요한 매우 긴 예제를 피하기 위해 캡션을 분할합니다.
+        # We split the captions to avoid having very long examples, which would require more GPU ram during training
         caption = example_batch["caption"][i].split(".")[0]
         try:
-            # 더 이상 호스팅되지 않는 이미지가 몇 개 있습니다. 이는 이러한 이미지를 건너뛰기 위한 작은 (더미) 핵입니다.
+            # There are a handful of images that are not hosted anymore. This is a small (dummy) hack to skip these
             processor.image_processor.fetch_images(example_batch["image_url"][i])
         except Exception:
             print(
-                "경고: 예제에서 인터넷에서 하나 이상의 이미지를 가져올 수 없습니다. 배치를 건너뜁니다."
+                "Warning: at least one image couldn't be retrieved from the internet in an example. Skipping the"
+                " batch."
             )
         prompts.append(
             [
                 example_batch["image_url"][i],
-                f"질문: 사진에 무엇이 있습니까? 답변: 이것은 {example_batch['name'][i]}입니다. {caption}</s>",
+                f"Question: What's on the picture? Answer: This is {example_batch['name'][i]}. {caption}</s>",
             ],
         )
     inputs = processor(prompts, transform=image_transform, return_tensors="pt").to(device)
@@ -71,7 +72,7 @@ def ds_transforms(example_batch):
     return inputs
 
 
-# 데이터세트 로드 및 준비
+# load and prepare dataset
 ds = load_dataset("TheFusion21/PokemonCards")
 ds = ds["train"].train_test_split(test_size=0.002)
 train_ds = ds["train"]
@@ -80,7 +81,7 @@ train_ds.set_transform(ds_transforms)
 eval_ds.set_transform(ds_transforms)
 
 
-# 중요, 모델보다 먼저 training_args를 정의합니다.
+# Important, define the training_args before the model
 ds_config = {
     "communication_data_type": "fp32",
     "bf16": {"enabled": True},
@@ -109,7 +110,7 @@ training_args = TrainingArguments(
     per_device_train_batch_size=1,
     per_device_eval_batch_size=1,
     gradient_accumulation_steps=1,
-    # gradient_checkpointing=True,  # OOM인 경우 주석 해제
+    # gradient_checkpointing=True,  # Uncomment if OOM
     dataloader_pin_memory=False,
     save_total_limit=3,
     eval_strategy="steps",
@@ -137,4 +138,4 @@ trainer = Trainer(
 )
 
 result = trainer.train()
-print(result)  # 프로세스당 하나씩 인쇄 - 주로 온전성 확인을 위해 여기에 있음
+print(result)  # Prints one per process - mostly here for sanity check
